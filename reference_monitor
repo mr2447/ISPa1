@@ -1,5 +1,3 @@
-import re
-
 TYPE = "type"
 ARGS = "args"
 RETURN = "return"
@@ -10,96 +8,36 @@ OBJC = "objc"
 
 class ABFile():
     def __init__(self, filename, create):
-        # Validate the filename before proceeding
-        if not self._validate_filename(filename):
-            raise ValueError(f"Invalid filename: {filename}")
-        
-        # globals
-        mycontext['debug'] = False
-        # local (per object) reference to the underlying file
+        # Basic filename handling
         self.Afn = filename + '.a'  # Backup file
         self.Bfn = filename + '.b'  # Writable file
 
-        # Ensure atomic creation of both files
+        # Create or open the files
         if create:
             self.Afile = openfile(self.Afn, create)
             self.Bfile = openfile(self.Bfn, create)
-            # Initialize the A file with 'SE' as a marker of file integrity if it's newly created
+            # Write 'SE' to initialize the backup file
             if create:
                 self.Afile.writeat('SE', 0)
 
-    def _validate_filename(self, filename):
-        """
-        Validate the filename according to the following rules:
-        - Filenames must contain only lowercase letters, numbers, hyphen, underscore, and period.
-        - Filenames cannot be '.', '..', or the blank string.
-        - Filenames cannot start with a period.
-        - Filenames must be no more than 120 characters long.
-        """
-        if not filename or filename in ('.', '..') or filename.startswith('.'):
-            return False
-        if len(filename) > 120:
-            return False
-        # Only allow lowercase letters, numbers, hyphen, underscore, and period
-        if not re.match(r'^[a-z0-9\-_\.]+$', filename):
-            return False
-        return True
-
-    def _is_valid(self, file):
-        """
-        This helper method checks if a file is valid by ensuring that it
-        starts with 'S' and ends with 'E'.
-        """
-        size = file.getsize()
-        if size < 2:
-            return False
-        
-        start_char = file.readat(1, 0)
-        end_char = file.readat(1, size - 1)
-        
-        return start_char == 'S' and end_char == 'E'
-
     def writeat(self, data, offset):
-        """
-        Allow all writes, even if the data is temporarily invalid.
-        """
-        # Write to the B file (writable file) without blocking or error
+        # Simple write to B file
         self.Bfile.writeat(data, offset)
 
     def readat(self, bytes, offset):
-        # Read from the A file (backup file)
+        # Simple read from A file
         return self.Afile.readat(bytes, offset)
 
     def close(self):
-        """
-        When closing the file, check if the B file is valid (starts with 'S' and ends with 'E').
-        If valid, copy B to A. If not, discard B.
-        """
-        if self._is_valid(self.Bfile):
-            # Copy contents of B to A
-            self.Afile.close()
-            self.Afile = openfile(self.Afn, False)  # Open the A file for writing
-            self.Afile.truncate(0)  # Clear existing contents of A
-
-            # Read the contents of B and write them into A
-            data = self.Bfile.readat(self.Bfile.getsize(), 0)
-            self.Afile.writeat(data, 0)
-        else:
-            # Discard B if it's invalid, raise an error to indicate tampering
-            raise ValueError("B file is invalid. It must start with 'S' and end with 'E'.")
-        
         # Close both files
         self.Afile.close()
         self.Bfile.close()
 
 def ABopenfile(filename, create):
-    """
-    ABopenfile opens the ABFile object and raises an error if any violation occurs.
-    """
+    # Expose ABFile object
     return ABFile(filename, create)
 
-
-# Securely expose ABopenfile in the RepyV2 context so it can be used by other applications
+# Secure dispatch module
 sec_file_def = {
     "obj-type": ABFile,
     "name": "ABFile",
@@ -110,5 +48,5 @@ sec_file_def = {
 
 CHILD_CONTEXT_DEF["ABopenfile"] = {TYPE: OBJC, ARGS: (str, bool), EXCP: Exception, RETURN: sec_file_def, TARGET: ABopenfile}
 
-# Execute the user code
+# Secure dispatch
 secure_dispatch_module()
