@@ -75,37 +75,44 @@ class ABFile():
         When closing the file, check if the B file is valid (starts with 'S' and ends with 'E').
         If valid, copy B to A. If not, discard B.
 
-class ABFile():
-    def __init__(self, filename, create):
-        # Simple file creation
-        self.Afn = filename + '.a'  # Backup file
-        self.Bfn = filename + '.b'  # Writable file
+awesomestudent@awesomestudent-ISP:~/repy_v2/RUNNABLE$ python3 repy.py encasementlib.r2py my_security_layer.r2py my_application.r2py
+---
+Uncaught exception!
+ ---
+Following is a full traceback, and a user traceback.
+The user traceback excludes non-user modules. The most recent call is displayed last.
 
-        # Create the files
-        if create:
-            self.Afile = openfile(self.Afn, create)
-            self.Bfile = openfile(self.Bfn, create)
-            # Write initial content to A
-            self.Afile.writeat('SE', 0)
+Full debugging traceback:
+  "repy.py", line 438, in main
+  "/home/awesomestudent/repy_v2/RUNNABLE/virtual_namespace.py", line 112, in evaluate
+  "/home/awesomestudent/repy_v2/RUNNABLE/safe.py", line 583, in safe_run
+  "encasementlib.r2py", line 244, in <module>
+  "encasementlib.r2py", line 229, in secure_dispatch
+  "/home/awesomestudent/repy_v2/RUNNABLE/namespace.py", line 797, in __do_func_call
+  "/home/awesomestudent/repy_v2/RUNNABLE/namespace.py", line 1063, in wrapped_function
+  "/home/awesomestudent/repy_v2/RUNNABLE/virtual_namespace.py", line 112, in evaluate
+  "/home/awesomestudent/repy_v2/RUNNABLE/safe.py", line 583, in safe_run
+  "my_security_layer.r2py", line 31, in <module>
+  "encasementlib.r2py", line 179, in _secure_dispatch_closure
+  "encasementlib.r2py", line 229, in secure_dispatch
+  "/home/awesomestudent/repy_v2/RUNNABLE/namespace.py", line 797, in __do_func_call
+  "/home/awesomestudent/repy_v2/RUNNABLE/namespace.py", line 1063, in wrapped_function
+  "/home/awesomestudent/repy_v2/RUNNABLE/virtual_namespace.py", line 112, in evaluate
+  "/home/awesomestudent/repy_v2/RUNNABLE/safe.py", line 583, in safe_run
+  "my_application.r2py", line 5, in <module>
 
-    def writeat(self, data, offset):
-        # Simple write
-        self.Bfile.writeat(data, offset)
+User traceback:
+  "encasementlib.r2py", line 244, in <module>
+  "encasementlib.r2py", line 229, in secure_dispatch
+  "my_security_layer.r2py", line 31, in <module>
+  "encasementlib.r2py", line 179, in _secure_dispatch_closure
+  "encasementlib.r2py", line 229, in secure_dispatch
+  "my_application.r2py", line 5, in <module>
 
-    def readat(self, bytes, offset):
-        # Simple read
-        return self.Afile.readat(bytes, offset)
+Exception (with class 'NameError'): name 'ABopenfile' is not defined
+---
+Terminated
 
-    def close(self):
-        # Just close the files without any complex checks
-        self.Afile.close()
-        self.Bfile.close()
-
-def ABopenfile(filename, create):
-    return ABFile(filename, create)
-
-# Secure dispatch module to ensure RepyV2 compliance
-secure_dispatch_module()
 
         """
         if self._is_valid(self.Bfile):
