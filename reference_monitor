@@ -75,29 +75,37 @@ class ABFile():
         When closing the file, check if the B file is valid (starts with 'S' and ends with 'E').
         If valid, copy B to A. If not, discard B.
 
-awesomestudent@awesomestudent-ISP:~/repy_v2/RUNNABLE$ python3 repy.py encasementlib.r2py my_security_layer.r2py my_application.r2py
----
-Uncaught exception!
- ---
-Following is a full traceback, and a user traceback.
-The user traceback excludes non-user modules. The most recent call is displayed last.
+class ABFile():
+    def __init__(self, filename, create):
+        # Simple file creation
+        self.Afn = filename + '.a'  # Backup file
+        self.Bfn = filename + '.b'  # Writable file
 
-Full debugging traceback:
-  "repy.py", line 438, in main
-  "/home/awesomestudent/repy_v2/RUNNABLE/virtual_namespace.py", line 112, in evaluate
-  "/home/awesomestudent/repy_v2/RUNNABLE/safe.py", line 583, in safe_run
-  "encasementlib.r2py", line 244, in <module>
-  "encasementlib.r2py", line 223, in secure_dispatch
-  "encasementlib.r2py", line 93, in _layer_code
+        # Create the files
+        if create:
+            self.Afile = openfile(self.Afn, create)
+            self.Bfile = openfile(self.Bfn, create)
+            # Write initial content to A
+            self.Afile.writeat('SE', 0)
 
-User traceback:
-  "encasementlib.r2py", line 244, in <module>
-  "encasementlib.r2py", line 223, in secure_dispatch
-  "encasementlib.r2py", line 93, in _layer_code
+    def writeat(self, data, offset):
+        # Simple write
+        self.Bfile.writeat(data, offset)
 
-Exception (with class 'exception_hierarchy.CodeUnsafeError'): Compiling security layer 'my_security_layer.r2py' failed! Got exception: 'Code failed safety check! Error: ("<class 'AttributeError'> 'alias' object has no attribute 'lineno'",)'
----
-Terminated
+    def readat(self, bytes, offset):
+        # Simple read
+        return self.Afile.readat(bytes, offset)
+
+    def close(self):
+        # Just close the files without any complex checks
+        self.Afile.close()
+        self.Bfile.close()
+
+def ABopenfile(filename, create):
+    return ABFile(filename, create)
+
+# Secure dispatch module to ensure RepyV2 compliance
+secure_dispatch_module()
 
         """
         if self._is_valid(self.Bfile):
