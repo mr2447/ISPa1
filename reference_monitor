@@ -1,116 +1,115 @@
-"""
-This security layer inadequately handles A/B storage for files in RepyV2.
+import re
 
-
-
-Note:
-    This security layer uses encasementlib.r2py, restrictions.default, repy.py and Python
-    Also you need to give it an application to run.
-    python repy.py restrictions.default encasementlib.r2py [security_layer].r2py [attack_program].r2py 
-    
-    """ 
-TYPE="type"
-ARGS="args"
-RETURN="return"
-EXCP="exceptions"
-TARGET="target"
-FUNC="func"
-OBJC="objc"
+TYPE = "type"
+ARGS = "args"
+RETURN = "return"
+EXCP = "exceptions"
+TARGET = "target"
+FUNC = "func"
+OBJC = "objc"
 
 class ABFile():
-  def __init__(self,filename,create):
-    # globals
-    mycontext['debug'] = False   
-    # local (per object) reference to the underlying file
-    self.Afn = filename+'.a'
-    self.Bfn = filename+'.b'
-    
-    if ((self.Afn in listfiles()) and (self.Bfn in listfiles())): 
-      self.Afile = openfile(self.Afn,create)
-      self.Afile.lock = createlock()
-      self.Bfile = openfile(self.Bfn,create)
-      self.Bfile.lock = createlock()
-      self.Afile.lock.acquire(True)
+    def __init__(self, filename, create):
+        # Validate the filename before proceeding
+        if not self._validate_filename(filename):
+            raise ValueError(f"Invalid filename: {filename}")
+        
+        # globals
+        mycontext['debug'] = False
+        # local (per object) reference to the underlying file
+        self.Afn = filename + '.a'  # Backup file
+        self.Bfn = filename + '.b'  # Writable file
 
-    else:   
-      # make the files and add 'SE' to the readat file...
-      if create:
-        self.Afile = openfile(self.Afn,create)
-        self.Afile.lock = createlock()
-        self.Afile.lock.acquire(True)
-        self.Afile.writeat('SE',0)
-        self.Bfile = openfile(self.Bfn,create)
-        self.Bfile.lock = createlock()	
-    
-    self.Bfile.lock.acquire(True)
-    arr = self.Afile.readat(None,0)
-    self.Bfile.writeat(arr,0)
-    self.Afile.lock.release()
-    self.Bfile.lock.release()
-    
-  def writeat(self,data,offset):
-    
-    # Write the requested data to the B file using the sandbox's writeat call
-    x = len(data)
-    self.Afile.lock.acquire(True)
-    y = len(self.Afile.readat(None,0))
-    doWrite = True
-    if (offset == 0):
-        if not data[0] == 'S':
-            doWrite = False
-    if ((offset+x) >= y):
-        if not data[x-1] == 'E':
-            doWrite = False
-        
-    if (doWrite == True):
-        self.Bfile.lock.acquire(True)
-        self.Bfile.writeat(data,offset)
-        self.Bfile.lock.release()
-        
-    self.Afile.lock.release()        
-        
-  def readat(self,bytes,offset):
-    # Read from the A file using the sandbox's readat...
-    self.Afile.lock.acquire(True)
-    b = self.Afile.readat(bytes,offset)
-    self.Afile.lock.release()
-    return b
+        # Ensure atomic creation of both files
+        if create:
+            self.Afile = openfile(self.Afn, create)
+            self.Bfile = openfile(self.Bfn, create)
+            # Initialize the A file with 'SE' as a marker of file integrity if it's newly created
+            if create:
+                self.Afile.writeat('SE', 0)
 
-  def close(self):
-    self.Afile.close()
-    if (self.Afn in listfiles()):
-        removefile(self.Afn)
-    self.Afile = openfile(self.Afn,True) 
-    self.Afile.lock = createlock()
-    self.Afile.lock.acquire(True)
-    self.Bfile.lock.acquire(True)
-    arr = self.Bfile.readat(None,0)
-    self.Afile.writeat(arr,0)
-    self.Afile.lock.release()
-    self.Bfile.lock.release()
-    self.Bfile.close()
-    if (self.Bfn in listfiles()):
-        removefile(self.Bfn)
-    self.Bfile = openfile(self.Bfn,True)     
-    self.Afile.close()
-    self.Bfile.close()
+    def _validate_filename(self, filename):
+        """
+        Validate the filename according to the following rules:
+        - Filenames must contain only lowercase letters, numbers, hyphen, underscore, and period.
+        - Filenames cannot be '.', '..', or the blank string.
+        - Filenames cannot start with a period.
+        - Filenames must be no more than 120 characters long.
+        """
+        if not filename or filename in ('.', '..') or filename.startswith('.'):
+            return False
+        if len(filename) > 120:
+            return False
+        # Only allow lowercase letters, numbers, hyphen, underscore, and period
+        if not re.match(r'^[a-z0-9\-_\.]+$', filename):
+            return False
+        return True
+
+    def _is_valid(self, file):
+        """
+        This helper method checks if a file is valid by ensuring that it
+        starts with 'S' and ends with 'E'.
+        """
+        size = file.getsize()
+        if size < 2:
+            return False
+        
+        start_char = file.readat(1, 0)
+        end_char = file.readat(1, size - 1)
+        
+        return start_char == 'S' and end_char == 'E'
+
+    def writeat(self, data, offset):
+        """
+        Allow all writes, even if the data is temporarily invalid.
+        """
+        # Write to the B file (writable file) without blocking or error
+        self.Bfile.writeat(data, offset)
+
+    def readat(self, bytes, offset):
+        # Read from the A file (backup file)
+        return self.Afile.readat(bytes, offset)
+
+    def close(self):
+        """
+        When closing the file, check if the B file is valid (starts with 'S' and ends with 'E').
+        If valid, copy B to A. If not, discard B.
+        """
+        if self._is_valid(self.Bfile):
+            # Copy contents of B to A
+            self.Afile.close()
+            self.Afile = openfile(self.Afn, False)  # Open the A file for writing
+            self.Afile.truncate(0)  # Clear existing contents of A
+
+            # Read the contents of B and write them into A
+            data = self.Bfile.readat(self.Bfile.getsize(), 0)
+            self.Afile.writeat(data, 0)
+        else:
+            # Discard B if it's invalid, raise an error to indicate tampering
+            raise ValueError("B file is invalid. It must start with 'S' and end with 'E'.")
+        
+        # Close both files
+        self.Afile.close()
+        self.Bfile.close()
 
 def ABopenfile(filename, create):
-  return ABFile(filename,create)
+    """
+    ABopenfile opens the ABFile object and raises an error if any violation occurs.
+    """
+    return ABFile(filename, create)
 
 
+# The code here sets up type checking and variable hiding for you.
+# You should not need to change anything below here.
+sec_file_def = {
+    "obj-type": ABFile,
+    "name": "ABFile",
+    "writeat": {"type": "func", "args": (str, int), "exceptions": Exception, "return": (int, type(None)), "target": ABFile.writeat},
+    "readat": {"type": "func", "args": ((int, type(None)), (int)), "exceptions": Exception, "return": str, "target": ABFile.readat},
+    "close": {"type": "func", "args": None, "exceptions": None, "return": (bool, type(None)), "target": ABFile.close}
+}
 
-
-# The code here sets up type checking and variable hiding for you.  You
-# should not need to change anything below here.
-sec_file_def = {"obj-type":ABFile,
-                "name":"ABFile",
-                "writeat":{"type":"func","args":(str,(int,long)),"exceptions":Exception,"return":(int,type(None)),"target":ABFile.writeat},
-                "readat":{"type":"func","args":((int,long,type(None)),(int,long)),"exceptions":Exception,"return":str,"target":ABFile.readat},
-                "close":{"type":"func","args":None,"exceptions":None,"return":(bool,type(None)),"target":ABFile.close}
-           }
-
-CHILD_CONTEXT_DEF["ABopenfile"] = {TYPE:OBJC,ARGS:(str,bool),EXCP:Exception,RETURN:sec_file_def,TARGET:ABopenfile}
+CHILD_CONTEXT_DEF["ABopenfile"] = {TYPE: OBJC, ARGS: (str, bool), EXCP: Exception, RETURN: sec_file_def, TARGET: ABopenfile}
 
 # Execute the user code
 secure_dispatch_module()
